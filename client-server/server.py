@@ -37,6 +37,7 @@ for year in tqdm(range(1800,2006)):
     
 app = Flask(__name__)
 
+@app.route('/', methods=['GET'])
 def get_client():
     return open('nations.html','r').read()
 

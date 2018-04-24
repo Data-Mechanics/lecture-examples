@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+  <title>The Wealth and Health of Nations</title>
+  <style>
+    html { min-width:1040px; }
+    body { background:#fcfcfa; color:#333; font-family:"PT Serif",serif; margin:1em auto 4em auto; position:relative; width:960px; }
+    svg { font:10px sans-serif; }
+    .axis path, .axis line { fill:none; stroke: #000; shape-rendering:crispEdges; }
+    #chart { margin-left:-40px; height:506px; }
+    text { font:10px sans-serif; }
+    .dot { stroke:#000; }
+    .axis path, .axis line { fill:none; stroke:#000; shape-rendering:crispEdges; }
+    .label { fill:#777; }
+    .year.label { font:500 196px "Helvetica Neue"; fill:#ddd; }
+    .year.label.active { fill:#aaa; }
+    .overlay { fill:none; pointer-events:all; cursor:ew-resize; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+  <script>
+    function main() {
+      fetch('/year/1800')
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(initialData) {
+
+          // Various accessors that specify the four dimensions of data to visualize.
+          function getX(d) { return d.income; }
+          function getY(d) { return d.lifeExpectancy; }
+          function getRadius(d) { return d.population; }
+          function getColor(d) { return d.region; }
+          function getName(d) { return d.name; }  
+
+          // Chart dimensions.
+          var margin = {top:19.5, right:19.5, bottom:19.5, left:39.5},
+              width = 960 - margin.right,
+              height = 500 - margin.top - margin.bottom;
+
+          // Various scales. These domains make assumptions of data, naturally.
+          var xScale = d3.scale.log().domain([300, 1e5]).range([0, width]),
+              yScale = d3.scale.linear().domain([10, 85]).range([height, 0]),
+              radiusScale = d3.scale.sqrt().domain([0, 5e8]).range([0, 40]),
+              colorScale = d3.scale.category10();
+
+          // The x & y axes.
+          var xAxis = d3.svg.axis().orient("bottom").scale(xScale).ticks(12, d3.format(",d")),
+              yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+          // Create the SVG container and set the origin.
+          var svg = d3.select("#chart").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+          // Add the x-axis.
+          svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis);
+
+          // Add the y-axis.
+          svg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis);
+
+          // Add an x-axis label.
+          svg.append("text")
+            .attr("class", "x label")
+            .attr("text-anchor", "end")
+            .attr("x", width)
+            .attr("y", height - 6)
+            .text("income per capita, inflation-adjusted (dollars)");
+
+          // Add a y-axis label.
+          svg.append("text")
+            .attr("class", "y label")
+            .attr("text-anchor", "end")
+            .attr("y", 6)
+            .attr("dy", ".75em")
+            .attr("transform", "rotate(-90)")
+            .text("life expectancy (years)");
+
+          // Add the year label; the value is set on transition.
+          var label = svg.append("text")
+            .attr("class", "year label")
+            .attr("text-anchor", "end")
+            .attr("y", height - 24)
+            .attr("x", width)
+            .text(1800);
+
+          // Add a dot per nation. Initialize the data at 1800, and set the colors.
+          var dot = svg.append("g")
+              .attr("class", "dots")
+              .selectAll(".dot")
+              .data(initialData)
+              .enter().append("circle")
+              .attr("class", "dot")
+              .style("fill", function(d) { return colorScale(getColor(d)); })
+              .call(position)
+              .sort(order)
+              ;
+
+          // Add a title.
+          dot.append("title")
+              .text(function(d) { return d.name; });
+
+          // Add an overlay for the year label.
+          var box = label.node().getBBox();
+
+          var overlay = svg.append("rect")
+                .attr("class", "overlay")
+                .attr("x", box.x)
+                .attr("y", box.y)
+                .attr("width", box.width)
+                .attr("height", box.height)
+                .on("mouseover", enableInteraction);
+
+          enableInteraction();
+
+          // Positions the dots based on data.
+          function position(dot) {
+            dot .attr("cx", function(d) { return xScale(getX(d)); })
+                .attr("cy", function(d) { return yScale(getY(d)); })
+                .attr("r", function(d) { return radiusScale(getRadius(d)); })
+                .style("opacity", 0.5)
+                ;
+          }
+
+          // Defines a sort order so that the smallest dots are drawn on top.
+          function order(a, b) {
+            return getRadius(b) - getRadius(a);
+          }
+
+          // After the transition finishes, you can mouseover to change the year.
+          function enableInteraction() {
+            var yearScale = d3.scale.linear()
+                .domain([1800, 2005])
+                .range([box.x + 10, box.x + box.width - 10])
+                .clamp(true);
+            overlay
+              .on("mouseover", function () { label.classed("active", true); })
+              .on("mouseout", function () { label.classed("active", false); })
+              .on("click", function () { displayYear(yearScale.invert(d3.mouse(this)[0])); });
+          }
+
+          // Updates the display to show the specified year.
+          function displayYear(year) {
+            fetch('/year/'+Math.floor(year))
+              .then(function(response) {
+                return response.json();
+              })
+              .then(function(myJson) {
+                dot.data(myJson, getName).call(position).sort(order);
+                label.text(Math.round(year));
+              });
+          }  
+        });
+    } //main
+  </script>
+  <body onload="main()">
+    <p id="chart"></p>
+  </body>
+</html>
